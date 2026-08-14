@@ -187,6 +187,9 @@
         <div><label>ค่าขยะ/เดือน (บาท)</label><input id="rmGarbage" type="number" step="0.01" placeholder="0"></div>
         <div><label>ค่าส่วนกลาง/เดือน (บาท)</label><input id="rmService" type="number" step="0.01" placeholder="0"></div>
       </div>
+      <label style="margin-top:16px;">➕ ค่าใช้จ่ายอื่น (ระบุชื่อ+ยอดได้ เช่น ค่า Wi-Fi 100฿)</label>
+      <div id="feeList"></div>
+      <button type="button" class="mini m-gray" style="margin:4px 0 0;" onclick="addFeeRow('feeList','','')">➕ เพิ่มรายการ</button>
       <button class="btn btn-gold" onclick="addRoom()">เพิ่มห้อง</button>
       <div class="msg" id="msgRoom"></div>
     </div>
@@ -318,7 +321,7 @@
   </div>
 </div>
 
-<!-- ===== Modal แก้ไขบิล (มีค่าขยะ + ค่าส่วนกลาง) ===== -->
+<!-- ===== Modal แก้ไขบิล (มีค่าขยะ + ค่าส่วนกลาง + ค่าใช้จ่ายอื่น) ===== -->
 <div class="modal-overlay" id="editModal" style="display:none;">
   <div class="modal">
     <span class="modal-x" onclick="closeModal('editModal')">✕</span>
@@ -328,6 +331,9 @@
     <label>ค่าเช่า (บาท)</label><input id="editRent" type="number" step="0.01">
     <label>ค่าขยะ (บาท)</label><input id="editGarbage" type="number" step="0.01">
     <label>ค่าส่วนกลาง (บาท)</label><input id="editService" type="number" step="0.01">
+    <label style="margin-top:14px;">➕ ค่าใช้จ่ายอื่น</label>
+    <div id="editFeeList"></div>
+    <button type="button" class="mini m-gray" style="margin:4px 0 0;" onclick="addFeeRow('editFeeList','','')">➕ เพิ่มรายการ</button>
     <p style="color:#6b736b; font-size:12px; margin-top:8px;">ค่าน้ำ/ไฟ คำนวณจากเรทของหอให้อัตโนมัติ</p>
     <div class="modal-actions">
       <button class="mini m-gray" onclick="closeModal('editModal')">ยกเลิก</button>
@@ -357,6 +363,9 @@
       <div><label>ค่าขยะ/เดือน (บาท)</label><input id="erGarbage" type="number" step="0.01"></div>
       <div><label>ค่าส่วนกลาง/เดือน (บาท)</label><input id="erService" type="number" step="0.01"></div>
     </div>
+    <label style="margin-top:16px;">➕ ค่าใช้จ่ายอื่น</label>
+    <div id="erFeeList"></div>
+    <button type="button" class="mini m-gray" style="margin:4px 0 0;" onclick="addFeeRow('erFeeList','','')">➕ เพิ่มรายการ</button>
     <div class="modal-actions">
       <button class="mini m-gray" onclick="closeModal('editRoomModal')">ยกเลิก</button>
       <button class="mini m-gold" onclick="submitEditRoom()">💾 บันทึก</button>
@@ -380,7 +389,26 @@
 
 <script>
 const esc = s => (s==null?'':String(s)).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-let DORM = {}, payType='addon', roomsCache=[], metersData={}, cfAction=null, editInvId=null, editRoomId=null;
+let DORM = {}, payType='addon', roomsCache=[], invsCache=[], metersData={}, cfAction=null, editInvId=null, editRoomId=null;
+
+function addFeeRow(containerId, label, amount){
+  const c=document.getElementById(containerId);
+  const row=document.createElement('div');
+  row.style.cssText='display:flex; gap:6px; margin-bottom:6px; align-items:center;';
+  row.innerHTML=`<input placeholder="ชื่อค่าใช้จ่าย (เช่น ค่า Wi-Fi)" style="flex:2;" value="${esc(label||'')}">
+    <input type="number" step="0.01" placeholder="บาท" style="flex:1;" value="${amount==null?'':amount}">
+    <button type="button" class="mini m-red" style="margin:0;" onclick="this.parentNode.remove()">✕</button>`;
+  c.appendChild(row);
+}
+function collectFees(containerId){
+  const arr=[];
+  document.querySelectorAll('#'+containerId+' > div').forEach(d=>{
+    const inp=d.querySelectorAll('input');
+    const label=inp[0].value.trim(), amount=parseFloat(inp[1].value);
+    if(label && !isNaN(amount) && amount>0) arr.push({label:label, amount:amount});
+  });
+  return arr;
+}
 
 function showMsg(id,t,ok){ const el=document.getElementById(id); el.className='msg '+(ok?'ok':'err'); el.textContent=t; el.scrollIntoView({behavior:'smooth',block:'center'}); }
 function closeModal(id){ document.getElementById(id).style.display='none'; }
@@ -480,9 +508,10 @@ async function addRoom(){
       elec_meter:document.getElementById('rmElec').value,
       deposit_amount:document.getElementById('rmDeposit').value,
       garbage_fee:document.getElementById('rmGarbage').value,
-      service_fee:document.getElementById('rmService').value})});
+      service_fee:document.getElementById('rmService').value,
+      extra_fees:collectFees('feeList')})});
   const d=await r.json(); showMsg('msgRoom', d.success?'✅ '+d.message:'❌ '+(d.message||'error'), d.success);
-  if(d.success){ ['rmNo','rmName','rmPhone','rmLine','rmRent','rmWater','rmElec','rmDeposit','rmGarbage','rmService'].forEach(i=>document.getElementById(i).value=''); loadRooms(); }
+  if(d.success){ ['rmNo','rmName','rmPhone','rmLine','rmRent','rmWater','rmElec','rmDeposit','rmGarbage','rmService'].forEach(i=>document.getElementById(i).value=''); document.getElementById('feeList').innerHTML=''; loadRooms(); }
 }
 function delRoom(id,no){
   askConfirm('🗑️ ลบห้อง','ลบห้อง '+no+' ออกจากระบบ? ข้อมูลผู้เช่าจะหาย', async()=>{
@@ -502,6 +531,8 @@ function openEditRoom(id){
   document.getElementById('erDepStatus').value=rm.deposit_status||'none';
   document.getElementById('erGarbage').value=rm.garbage_fee||'';
   document.getElementById('erService').value=rm.service_fee||'';
+  document.getElementById('erFeeList').innerHTML='';
+  (rm.extra_fees||[]).forEach(f=>addFeeRow('erFeeList',f.label,f.amount));
   document.getElementById('erMsg').className='msg';
   document.getElementById('editRoomModal').style.display='flex';
 }
@@ -516,7 +547,8 @@ async function submitEditRoom(){
         deposit_amount:document.getElementById('erDeposit').value,
         deposit_status:document.getElementById('erDepStatus').value,
         garbage_fee:document.getElementById('erGarbage').value,
-        service_fee:document.getElementById('erService').value})});
+        service_fee:document.getElementById('erService').value,
+        extra_fees:collectFees('erFeeList')})});
     const d=await r.json();
     msgEl.className='msg '+(d.success?'ok':'err'); msgEl.textContent=d.success?'✅ '+d.message:'❌ '+(d.message||'error');
     if(d.success){ setTimeout(()=>{ closeModal('editRoomModal'); loadRooms(); },1200); }
@@ -598,6 +630,7 @@ async function loadInvoices(){
     const r=await fetch(`/api/dorm/invoices?month=${document.getElementById('invMonth').value}&year=${document.getElementById('invYear').value}`);
     const d=await r.json(); if(!d.success) return;
     const invs=d.invoices||[];
+    invsCache=invs;
     document.getElementById('invEmpty').style.display=invs.length?'none':'block';
     const fmt=n=>Number(n||0).toLocaleString('th-TH');
     document.getElementById('invTotal').textContent=fmt(invs.reduce((s,i)=>s+Number(i.total_amount||0),0));
@@ -616,7 +649,7 @@ async function loadInvoices(){
       if(i.status==='pending'){
         act+=`<button class="mini m-green" onclick="markPaid('${i.id}','${esc(i.room_no)}')">💰 จ่ายแล้ว</button>`;
         act+=`<button class="mini m-gray" onclick="sendLine('${i.id}')">💬 ส่ง LINE</button>`;
-        act+=`<button class="mini m-gold" onclick="openEditModal('${i.id}','${esc(i.water_usage||0)}','${esc(i.elec_usage||0)}','${esc(i.rent_amount||0)}','${esc(i.garbage_fee||0)}','${esc(i.service_fee||0)}')">✏️ แก้ไข</button>`;
+        act+=`<button class="mini m-gold" onclick="openEditModal('${i.id}')">✏️ แก้ไข</button>`;
         act+=`<button class="mini m-red" onclick="cancelInv('${i.id}','${esc(i.room_no)}')">🗑️ ยกเลิก</button>`;
       }
       return `<tr><td><b>${esc(i.room_no)}</b></td><td>${esc(i.tenant_name||'-')}</td>
@@ -646,16 +679,20 @@ async function sendLine(id){ const r=await fetch(`/api/dorm/invoices/${id}/send_
 function exportCsv(){ window.location='/api/dorm/invoices/export?month='+document.getElementById('invMonth').value+'&year='+document.getElementById('invYear').value; }
 
 /* ---- แก้ไขบิล (มีค่าขยะ + ค่าส่วนกลาง) ---- */
-function openEditModal(id,w,e,rent,g,s){
+function openEditModal(id){
+  const i=invsCache.find(x=>x.id===id); if(!i) return;
   editInvId=id;
-  document.getElementById('editWater').value=w;
-  document.getElementById('editElec').value=e;
-  document.getElementById('editRent').value=rent;
-  document.getElementById('editGarbage').value=g;
-  document.getElementById('editService').value=s;
+  document.getElementById('editWater').value=i.water_usage||'';
+  document.getElementById('editElec').value=i.elec_usage||'';
+  document.getElementById('editRent').value=i.rent_amount||'';
+  document.getElementById('editGarbage').value=i.garbage_fee||'';
+  document.getElementById('editService').value=i.service_fee||'';
+  document.getElementById('editFeeList').innerHTML='';
+  (i.extra_fees||[]).forEach(f=>addFeeRow('editFeeList',f.label,f.amount));
   document.getElementById('editMsg').className='msg';
   document.getElementById('editModal').style.display='flex';
 }
+
 async function submitEdit(){
   const msgEl=document.getElementById('editMsg');
   try{
@@ -664,7 +701,8 @@ async function submitEdit(){
         elec_usage:document.getElementById('editElec').value,
         rent_amount:document.getElementById('editRent').value,
         garbage_fee:document.getElementById('editGarbage').value,
-        service_fee:document.getElementById('editService').value})});
+        service_fee:document.getElementById('editService').value,
+        extra_fees:collectFees('editFeeList')})});
     const d=await r.json();
     msgEl.className='msg '+(d.success?'ok':'err'); msgEl.textContent=d.success?'✅ '+d.message:'❌ '+(d.message||'error');
     if(d.success){ setTimeout(()=>{ closeModal('editModal'); loadInvoices(); },1200); }
