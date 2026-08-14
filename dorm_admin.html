@@ -603,6 +603,7 @@ async function loadInvoices(){
       act+=`<button class="mini m-gold" onclick="window.open('/api/dorm/invoices/${i.id}/billcard','_blank')">🧾 QR บิล</button>`;
       act+=`<button class="mini m-gray" onclick="copyBill('${esc(i.bill_token)}')">🔗 ลิงก์บิล</button>`;
       if(i.status==='pending'){
+        act+=`<button class="mini m-green" onclick="markPaid('${i.id}','${esc(i.room_no)}')">💰 จ่ายแล้ว</button>`;
         act+=`<button class="mini m-gray" onclick="sendLine('${i.id}')">💬 ส่ง LINE</button>`;
         act+=`<button class="mini m-gold" onclick="openEditModal('${i.id}','${esc(i.water_usage||0)}','${esc(i.elec_usage||0)}','${esc(i.rent_amount||0)}','${esc(i.garbage_fee||0)}','${esc(i.service_fee||0)}')">✏️ แก้ไข</button>`;
         act+=`<button class="mini m-red" onclick="cancelInv('${i.id}','${esc(i.room_no)}')">🗑️ ยกเลิก</button>`;
@@ -659,7 +660,13 @@ async function submitEdit(){
   }catch(e){ msgEl.className='msg err'; msgEl.textContent='❌ '+e.message; }
 }
 
-/* ---- ยกเลิกบิล ---- */
+function markPaid(id,no){
+  askConfirm('💰 ยืนยันรับเงิน','ยืนยันว่าได้รับเงินค่าห้อง '+no+' แล้ว (เงินสด/จ่ายตรง)?', async()=>{
+    const r=await fetch('/api/dorm/invoices/'+id+'/mark_paid',{method:'POST'}); const d=await r.json();
+    showMsg('msgInv', d.success?'✅ '+d.message:'❌ '+(d.message||'error'), d.success); loadInvoices();
+  });
+}
+
 function cancelInv(id,no){
   askConfirm('🗑️ ยกเลิกบิล','ยกเลิกบิลห้อง '+no+'? (มิเตอร์จะคืนค่าเดิม แล้วสร้างบิลใหม่ได้)', async()=>{
     try{
