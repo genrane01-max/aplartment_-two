@@ -105,7 +105,7 @@ def is_dorm_expired(dorm):
 def mask_key(key):
     return ("****" + key[-4:]) if key else ""
 
-def get_current_dorm():
+def get_current_dorm(allow_expired=False):
     dorm_id = session.get("dorm_id")
     if not dorm_id:
         return None, None
@@ -114,7 +114,9 @@ def get_current_dorm():
         session.pop("dorm_id", None)
         return None, None
     dorm = doc.to_dict()
-    if not dorm.get("is_active", True) or is_dorm_expired(dorm):
+    if not dorm.get("is_active", True):
+        return None, None
+    if is_dorm_expired(dorm) and not allow_expired:
         return None, None
     return dorm_id, dorm
 
@@ -454,7 +456,7 @@ def dorm_login_page():
 
 @app.route("/dorm/admin")
 def dorm_admin_page():
-    dorm_id, dorm = get_current_dorm()
+    dorm_id, dorm = get_current_dorm(allow_expired=True)
     if not dorm_id:
         return redirect("/dorm/login")
     return render_template("dorm_admin.html", dorm=dorm)
@@ -483,10 +485,10 @@ def dorm_login():
         return jsonify({"success": False, "message": "username หรือรหัสผ่านไม่ถูกต้อง"}), 401
     if not dorm.get("is_active", True):
         return jsonify({"success": False, "message": "หอพักนี้ถูกระงับ กรุณาติดต่อผู้ให้บริการ"}), 403
-    if is_dorm_expired(dorm):
-        return jsonify({"success": False, "message": "แพ็กเกจหมดอายุ กรุณาต่ออายุ"}), 403
     session["dorm_id"] = doc.id
     session.permanent = True
+    if is_dorm_expired(dorm):
+        return jsonify({"success": True, "message": "เข้าสู่ระบบสำเร็จ", "locked": True})
     return jsonify({"success": True, "message": "เข้าสู่ระบบสำเร็จ"})
 
 @app.route("/api/dorm/register", methods=["POST"])
@@ -983,7 +985,7 @@ def dorm_addon_status():
 
 @app.route("/api/dorm/platform_qr", methods=["GET"])
 def dorm_platform_qr():
-    dorm_id, _ = get_current_dorm()
+    dorm_id, _ = get_current_dorm(allow_expired=True)
     if not dorm_id:
         return jsonify({"success": False, "message": "Unauthorized"}), 401
     t = request.args.get("type", "renewal")
@@ -998,7 +1000,7 @@ def dorm_platform_qr():
 @app.route("/api/dorm/platform_pay", methods=["POST"])
 @limiter.limit("5 per minute")
 def dorm_platform_pay():
-    dorm_id, _ = get_current_dorm()
+    dorm_id, _ = get_current_dorm(allow_expired=True)
     if not dorm_id:
         return jsonify({"success": False, "message": "Unauthorized"}), 401
     t = request.form.get("type", "renewal")
