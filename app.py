@@ -693,6 +693,57 @@ def dorm_rooms_bulk_fees():
         updated += 1
     return jsonify({"success": True, "message": f"ตั้งค่าขยะ/ค่าส่วนกลางให้ทุกห้อง ({updated} ห้อง) เรียบร้อย"})
 
+@app.route("/api/dorm/invoices/generate_daily", methods=["POST"])
+def dorm_generate_daily_invoice():
+    dorm_id, dorm = get_current_dorm()
+    if not dorm_id:
+        return jsonify({"success": False, "message": "Unauthorized"}), 401
+    data = request.get_json(silent=True) or {}
+    room_id = (data.get("room_id") or "").strip()
+    tenant_name = (data.get("tenant_name") or "").strip()
+    mode = data.get("mode", "nights")
+    try:
+        nights = int(data.get("nights") or 0)
+        daily_rate = float(data.get("daily_rate") or 0)
+        flat_amount = float(data.get("flat_amount") or 0)
+    except (TypeError, ValueError):
+        return jsonify({"success": False, "message": "กรอกตัวเลขให้ถูกต้อง"}), 400
+    if mode == "nights":
+        if nights <= 0 or daily_rate <= 0:
+            return jsonify({"success": False, "message": "กรอกจำนวนคืนและราคา/คืน"}), 400
+        total = round(nights * daily_rate, 2)
+    elif mode == "flat":
+        if flat_amount <= 0:
+            return jsonify({"success": False, "message": "กรอกยอดรวม"}), 400
+        total = round(flat_amount, 2)
+        nights, daily_rate = 1, 0
+    else:
+        return jsonify({"success": False, "message": "mode ไม่ถูกต้อง"}), 400
+    room_doc = dorm_ref(dorm_id).collection("rooms").document(room_id).get()
+    if not room_doc.exists:
+        return jsonify({"success": False, "message": "ไม่พบห้อง"}), 404
+    room = room_doc.to_dict()
+    now = datetime.now()
+    inv_ref = dorm_ref(dorm_id).collection("invoices").document()
+    inv_ref.set({
+        "dorm_id": dorm_id, "month": now.month, "year": now.year + 543, "room_id": room_id,
+        "room_no": room.get("room_no"),
+        "tenant_name": tenant_name or room.get("tenant_name", ""),
+        "bill_type": "daily",
+        "daily_info": {"mode": mode, "nights": nights, "daily_rate": daily_rate},
+        "water_usage": 0, "elec_usage": 0,
+        "water_cost": 0, "elec_cost": 0,
+        "rent_amount": total, "garbage_fee": 0, "service_fee": 0,
+        "extra_fees": [],
+        "total_amount": total,
+        "status": "pending", "bill_token": secrets.token_urlsafe(32),
+        "trans_ref": "", "slip_image": "", "slip_filename": "",
+        "prev_water_meter": float(room.get("water_meter") or 0),
+        "prev_elec_meter": float(room.get("elec_meter") or 0),
+        "created_at": firestore.SERVER_TIMESTAMP, "paid_at": None
+    })
+    return jsonify({"success": True, "message": f"สร้างบิลรายวันห้อง {room.get('room_no')} ยอด {total:.2f} บาท เรียบร้อย", "invoice_id": inv_ref.id})
+
 @app.route("/api/dorm/invoices/generate", methods=["POST"])
 def dorm_generate_invoices():
     dorm_id, dorm = get_current_dorm()
