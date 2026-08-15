@@ -654,8 +654,12 @@ def dorm_edit_room(room_id):
         deposit_amount = float(data.get("deposit_amount") or 0)
         garbage_fee = float(data.get("garbage_fee") or 0)
         service_fee = float(data.get("service_fee") or 0)
+        water_meter = float(data.get("water_meter") or 0)
+        elec_meter = float(data.get("elec_meter") or 0)
     except ValueError:
         return jsonify({"success": False, "message": "ตัวเลขไม่ถูกต้อง"}), 400
+    if water_meter < 0 or elec_meter < 0:
+        return jsonify({"success": False, "message": "มิเตอร์ติดลบไม่ได้"}), 400
     extra_fees = parse_extra_fees(data.get("extra_fees"))
     update = {
         "tenant_name": (data.get("tenant_name") or "").strip(),
@@ -665,6 +669,8 @@ def dorm_edit_room(room_id):
         "deposit_amount": deposit_amount,
         "garbage_fee": garbage_fee,
         "service_fee": service_fee,
+        "water_meter": water_meter,
+        "elec_meter": elec_meter,
         "extra_fees": extra_fees,
     }
     ds = (data.get("deposit_status") or "").strip()
